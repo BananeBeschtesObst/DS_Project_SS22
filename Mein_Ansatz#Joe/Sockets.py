@@ -24,7 +24,6 @@ def broadcast_socket (timeout=None):
 
 def setup_tcp_listener_socket():
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server_socket.bind(("127.0.0.1", 0))
     server_socket.listen()
     return server_socket
