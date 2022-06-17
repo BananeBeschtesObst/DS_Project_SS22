@@ -84,11 +84,10 @@ def setup_multicast_listener():
     while True:
         msg=sock.recv(10240)
         nummer = int(msg.decode().split('_')[1])
-        msg1 = int(msg.decode().split('_')[2])
 
         if sequence_number !=nummer:
             # For Python 3, change next line to "print(sock.recv(10240))"
-            print(msg1)
+            print(msg)
             sequence_number=nummer
 
 

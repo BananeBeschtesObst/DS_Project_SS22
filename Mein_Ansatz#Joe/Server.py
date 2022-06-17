@@ -109,7 +109,7 @@ def setup_leader(address):
 def connect_client():
 
     while True:
-        #try:
+        try:
             data, addr= SERVER.accept()
             client_data=data.recv(1024)
 
@@ -117,10 +117,11 @@ def connect_client():
                 print (f'[{SERVER_ADDRESS[0]}, {SERVER_ADDRESS[1]}]: New Client connection {addr[0]}, {addr[1]}')
                 thread = threading.Thread(target=receive_client_message, args=(data, addr))
                 thread.start()
-    #except Exception as e:
-            #print (e)
-            #break
-
+        except Exception as e:
+            print (e)
+            break
+    print('TCP listener closing')
+    SERVER.close()
 
 def receive_client_message (client, addr):
     while True:
@@ -142,9 +143,16 @@ def send_client_message(msg, addr):
     MULTICAST_TTL = 2
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
-    msg_sequence_number=msg_sequence_number+1
-    sock.sendto(f'_{msg_sequence_number}_{addr[0]} {addr[1]}] sent: {msg}'.encode(), (Sockets.MCAST_GRP, Sockets.MCAST_PORT))
-    print(msg_sequence_number)
+    try:
+        msg_sequence_number=msg_sequence_number+1
+        sock.sendto(f'_{msg_sequence_number}_{addr[0]} {addr[1]}] sent: {msg}'.encode(), (Sockets.MCAST_GRP, Sockets.MCAST_PORT))
+        print(msg_sequence_number)
+
+    except Exception as e:
+        print(f'Failed to send Message to the other Clients: {e}')
+    finally:
+        sock.close()
+
 
 broadcast()
 threading.Thread(target=broadcast_listener).start()
