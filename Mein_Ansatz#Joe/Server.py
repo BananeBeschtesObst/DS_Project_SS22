@@ -14,45 +14,19 @@ DISCONNECT_MESSAGE="!DISCONNECT"
 BROADCAST_PORT=10001
 BROADCAST_CODE = '9310e231f20a07cb53d96b90a978163d'
 
-server =Sockets.setup_tcp_listener_socket()
-SERVER_ADDRESS=server.getsockname()
+SERVER =Sockets.setup_tcp_listener_socket()
+SERVER_ADDRESS=SERVER.getsockname()
+Sockets.SERVER_LIST.append(SERVER_ADDRESS)
 
+BROADCAST_CODE_Client='Nicetomeetyou'
 
 LEADER=''
 
+msg_sequence_number = 0
 
 print(f"Server runs on {SERVER_ADDRESS}")
 
 
-def handle_client(conn, addr):
-    print (f"[NEW CONNECTION]{addr} conenected")
-
-    connected=True
-    while connected:
-        #msg_length=conn.recv(HEADER).decode(FORMAT)
-        if msg_length:
-            msg_length=int(msg_length)
-            msg= conn.recv(msg_length).decode(FORMAT)
-            if msg==DISCONNECT_MESSAGE:
-                connected=False
-
-            print(f"[{addr}] {msg}")
-            conn.send("Msg received".encode(FORMAT))
-
-    conn.close()
-
-
-
-
-
-
-def start ():
-    server.listen()
-    while True:
-        conn, addr = server.accept()
-        thread=threading.Thread(target=handle_client, args=(conn,addr))
-        thread.start()
-        print(f" [ACTIVE CONNECTIONS] {threading.active_count()-1}")
 
 #We use a broadcast to look for another active server
 def broadcast ():
@@ -62,7 +36,7 @@ def broadcast ():
 
     #For loop to enable more than one attempt of finding another server
     for i in range (0,3):
-        broadcast_socket.sendto(f'{BROADCAST_CODE}_{SERVER_ADDRESS[1]}'.encode(), ('<broadcast>', BROADCAST_PORT))
+        broadcast_socket.sendto(f'{BROADCAST_CODE}_{SERVER_ADDRESS[0]}_{SERVER_ADDRESS[1]}'.encode(), ('<broadcast>', BROADCAST_PORT))
         print(f"Sending Broadcast message on Port {BROADCAST_PORT} with {BROADCAST_CODE}")
         reply=False
 
@@ -71,7 +45,7 @@ def broadcast ():
             data, addr= broadcast_socket.recvfrom(1024)
             if data.startswith(f'Was geht ab'.encode()):
                 print("Found Server on ", addr[0])
-                response_port = int (data.decode().split('_')[1])
+                response_port = int (data.decode().split('_')[2])
                 Sockets.SERVER_LIST.append(SERVER_ADDRESS)
                 print(f"In der Liste ist/sind {len(Sockets.SERVER_LIST)} Server")
                 leader_address=((addr[0], response_port))
@@ -88,30 +62,34 @@ def broadcast ():
 
 
 def broadcast_listener():
+    print(f'Server up and running at {SERVER_ADDRESS}')
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     listen_socket.bind(('127.0.0.1', BROADCAST_PORT))
 
-    listen_address= listen_socket.getsockname()
-
-    print(f"Listening to Broadcast messages {listen_address}")
     active=True
     while active:
         try:
             data, addr = listen_socket.recvfrom(1024)
-            print(data.decode(FORMAT))
-            print(is_leader)
-        except TimeoutError:
+        except Exception as e:
+            print(e)
             pass
         else:
             if is_leader and data.startswith(BROADCAST_CODE.encode()):
-                print(f"Received Broadcast from {addr[0]}, replying with Response code")
-                listen_socket.sendto(str.encode(f"Was geht ab{addr[0]}_{SERVER_ADDRESS[1]}"), addr)
-                response_port = int (data.decode().split('_')[1])
-                server_adress=(addr[0], response_port)
+                print(f"Received Broadcast from {addr[0]} {addr[1]}, replying with Response code")
+                listen_socket.sendto(str.encode(f"Was geht ab _{addr[0]}_{SERVER_ADDRESS[1]}"), addr)
+                response_port_server = int (data.decode().split('_')[2])
+                server_adress=(addr[0], response_port_server)
                 Sockets.SERVER_LIST.append(server_adress)
-                print (len(Sockets.SERVER_LIST))
+                print(f"Aktuelle Serverliste: {Sockets.SERVER_LIST}")
+            if is_leader and data.startswith(BROADCAST_CODE_Client.encode()):
+                print(f"Received Broadcast from {addr[0]}, replying with Response code")
+                listen_socket.sendto(str.encode(f"{Sockets.BROADCAST_CODE_CLIENT}{addr[0]}_{SERVER_ADDRESS[1]}"), addr)
+                response_port_client = int(data.decode().split('_')[1])
+                client_adress = (addr[0], response_port_client)
+                Sockets.CLIENT_LIST.append(client_adress)
+
 
     print('Closing Broadcast Listener')
     listen_socket.close()
@@ -121,15 +99,54 @@ def setup_leader(address):
     global is_leader
     leader_address = address
     is_leader=leader_address ==SERVER_ADDRESS
+    LEADER=address
     if is_leader:
         print("Ich bin der Leader")
 
     else:
         print("Jemand anderes ist der Leader")
 
+def connect_client():
+
+    while True:
+        #try:
+            data, addr= SERVER.accept()
+            client_data=data.recv(1024)
+
+            if client_data:
+                print (f'[{SERVER_ADDRESS[0]}, {SERVER_ADDRESS[1]}]: New Client connection {addr[0]}, {addr[1]}')
+                thread = threading.Thread(target=receive_client_message, args=(data, addr))
+                thread.start()
+    #except Exception as e:
+            #print (e)
+            #break
+
+
+def receive_client_message (client, addr):
+    while True:
+        #try:
+            data = client.recv(1024)
+            msg=data.decode('utf-8')
+            if msg!='':
+                print(f'{SERVER_ADDRESS[0]}: New Message from {addr[0]}: {msg}')
+                Sockets.CLIENT_MESSAGES.append(f'{SERVER_ADDRESS[0]}: New Message from {addr[0]}: {msg}')
+                send_client_message(msg, addr)
+
+        #except Exception as e:
+            #print(e)
+            #break
+
+def send_client_message(msg, addr):
+    global msg_sequence_number
+    print(f'hier {msg_sequence_number}')
+    MULTICAST_TTL = 2
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
+    msg_sequence_number=msg_sequence_number+1
+    sock.sendto(f'_{msg_sequence_number}_{addr[0]} {addr[1]}] sent: {msg}'.encode(), (Sockets.MCAST_GRP, Sockets.MCAST_PORT))
+    print(msg_sequence_number)
 
 broadcast()
-
 threading.Thread(target=broadcast_listener).start()
+connect_client()
 
-start ()
