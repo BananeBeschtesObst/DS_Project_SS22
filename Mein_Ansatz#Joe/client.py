@@ -7,6 +7,7 @@ import Sockets
 BROADCAST_PORT=10001
 BROADCAST_CODE = '9310e231f20a07cb53d96b90a978163d'
 FORMAT='utf-8'
+client_socket = Sockets.setup_client_socket()
 
 SERVER_ADRESS=''
 #client=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -19,7 +20,7 @@ def client_broadcast():
     print (f"Client Broadcast on {broadcast_socket.getsockname()}")
     connected= True
     while connected:
-        broadcast_socket.sendto(f'{Sockets.BROADCAST_CODE_CLIENT}_{broadcast_socket.getsockname()[1]}'.encode(),('<broadcast>', BROADCAST_PORT))
+        broadcast_socket.sendto(f'{Sockets.BROADCAST_CODE_CLIENT}_{client_socket.getsockname()[1]}'.encode(),('<broadcast>', BROADCAST_PORT))
         print("Client looking for Server")
 
         try:
@@ -37,7 +38,6 @@ def client_broadcast():
 
 def connect_with_server():
     global client_socket
-    client_socket=Sockets.setup_client_socket()
     client_socket.connect(SERVER_ADRESS)
 
     client_address = client_socket.getsockname()

@@ -14,6 +14,7 @@ DISCONNECT_MESSAGE="!DISCONNECT"
 BROADCAST_PORT=10001
 BROADCAST_CODE = '9310e231f20a07cb53d96b90a978163d'
 
+SERVER_LIST_RECEIVER=[]
 SERVER =Sockets.setup_tcp_listener_socket()
 SERVER_ADDRESS=SERVER.getsockname()
 Sockets.SERVER_LIST.append(SERVER_ADDRESS)
@@ -22,7 +23,10 @@ BROADCAST_CODE_Client='Nicetomeetyou'
 
 LEADER=''
 
+TCP_Port=8090
 msg_sequence_number = 0
+
+NEIGHBOR=None
 
 print(f"Server runs on {SERVER_ADDRESS}")
 
@@ -82,6 +86,7 @@ def broadcast_listener():
                 response_port_server = int (data.decode().split('_')[2])
                 server_adress=(addr[0], response_port_server)
                 Sockets.SERVER_LIST.append(server_adress)
+                send_server_list()
                 print(f"Aktuelle Serverliste: {Sockets.SERVER_LIST}")
             if is_leader and data.startswith(BROADCAST_CODE_Client.encode()):
                 print(f"Received Broadcast from {addr[0]}, replying with Response code")
@@ -89,7 +94,7 @@ def broadcast_listener():
                 response_port_client = int(data.decode().split('_')[1])
                 client_adress = (addr[0], response_port_client)
                 Sockets.CLIENT_LIST.append(client_adress)
-
+        find_neighbors()
 
     print('Closing Broadcast Listener')
     listen_socket.close()
@@ -112,11 +117,15 @@ def connect_client():
         try:
             data, addr= SERVER.accept()
             client_data=data.recv(1024)
-
-            if client_data:
+            if addr in Sockets.CLIENT_LIST:
+                print("Ist ein Client")
                 print (f'[{SERVER_ADDRESS[0]}, {SERVER_ADDRESS[1]}]: New Client connection {addr[0]}, {addr[1]}')
                 thread = threading.Thread(target=receive_client_message, args=(data, addr))
                 thread.start()
+            else:
+                print("Ist ein Server")
+                a=pickle.loads(client_data)
+                print(a)
         except Exception as e:
             print (e)
             break
@@ -153,8 +162,36 @@ def send_client_message(msg, addr):
     finally:
         sock.close()
 
+def send_server_list ():
+    print(f'abc {Sockets.SERVER_LIST}')
+    for i in range(len(Sockets.SERVER_LIST)):
+        if is_leader:
+            addr=Sockets.SERVER_LIST[i]
+            print(f'addr {addr}')
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(addr)
+            print(f'hier{Sockets.SERVER_LIST}')
+            data = pickle.dumps(Sockets.SERVER_LIST)
+            sock.send(data)
+
+
+def find_neighbors():
+    global NEIGHBOR
+    length= len(Sockets.SERVER_LIST)
+    if length==1:
+        NEIGHBOR=None
+        print('I have no Neighbor')
+        return
+    Sockets.SERVER_LIST.sort()
+    print(Sockets.SERVER_LIST)
+    print (SERVER_ADDRESS)
+    index=Sockets.SERVER_LIST.index(SERVER_ADDRESS)
+    print(index)
+
+
 
 broadcast()
 threading.Thread(target=broadcast_listener).start()
-connect_client()
+threading.Thread(target=connect_client).start()
+#threading.Thread(target=send_server_list).start()
 
