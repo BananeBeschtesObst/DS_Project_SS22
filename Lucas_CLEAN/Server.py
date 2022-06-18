@@ -6,7 +6,7 @@ import Shared
 
 is_leader = False
 
-SERVER =Shared.setup_tcp_listener_socket()
+SERVER = Shared.setup_tcp_listener_socket()
 SERVER_ADDRESS=SERVER.getsockname()
 Shared.SERVER_LIST.append(SERVER_ADDRESS)
 
@@ -124,7 +124,7 @@ def receive_client_message (client, addr):
                 Shared.CLIENT_MESSAGES.append(f'{SERVER_ADDRESS[0]}: New Message from client {addr[0]}: {msg}')
                 send_client_message(msg, addr)
 
-def send_client_message(msg, addr):
+def send_client_message(msg, addr): # multicast sender
     MULTICAST_TTL = 2
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
