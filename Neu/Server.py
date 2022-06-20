@@ -1,5 +1,5 @@
 import socket
-import Utility
+import Shared
 
-Utility.broadcast_listener()
-Utility.broadcast_sender()
+Shared.broadcast_listener()
+Shared.broadcast_sender()
