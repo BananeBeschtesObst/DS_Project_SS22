@@ -22,14 +22,14 @@ def broadcast ():
 
     #For loop to enable more than one attempt of finding another server
     for i in range (0,3):
-        broadcast_socket.sendto(f'{Shared.BROADCAST_CODE}_{SERVER_ADDRESS}'.encode(), ('<broadcast>', Shared.BROADCAST_PORT))
-        print(f"Sending Broadcast message on Port {Shared.BROADCAST_PORT} with {Shared.BROADCAST_CODE}")
+        broadcast_socket.sendto(f'{Shared.BROADCAST_CODE_SERVER}_{SERVER_ADDRESS}'.encode(), ('<broadcast>', Shared.BROADCAST_PORT))
+        print(f"Sending Broadcast message on Port {Shared.BROADCAST_PORT} with {Shared.BROADCAST_CODE_SERVER}")
         reply=False
 
         #Now we wait for a response packet. If no packet is received within 1 Second, broadcast again
         try:
             data, addr= broadcast_socket.recvfrom(1024)
-            if data.startswith(f'Was geht ab'.encode()):
+            if data.startswith(f'I am a server'.encode()):
                 print("Found Server on ", addr[0])
                 response_port = int (data.decode().split('_')[2])
                 Shared.SERVER_LIST.append(SERVER_ADDRESS)
@@ -47,7 +47,7 @@ def broadcast ():
         setup_leader(SERVER_ADDRESS)
 
 
-def broadcast_listener():
+def broadcast_listener(): # listens to all broadcasting hosts in the network; could be a server or a client
     print(f'Server up and running at {SERVER_ADDRESS}')
     listen_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -62,16 +62,18 @@ def broadcast_listener():
             print(e)
             pass
         else:
-            if is_leader and data.startswith(Shared.BROADCAST_CODE.encode()):
-                print(f"Received Broadcast from {addr[0]} {addr[1]}, replying with Response code")
-                listen_socket.sendto(str.encode(f"Was geht ab _{addr[0]}_{SERVER_ADDRESS[1]}"), addr)
-                response_port_server = int (data.decode().split('_')[2])
-                server_adress=(addr[0], response_port_server)
-                Shared.SERVER_LIST.append(server_adress)
-                send_server_list()
+            if is_leader and data.startswith(Shared.BROADCAST_CODE_SERVER.encode()): # found a server on the network!
+                print(f"Received Broadcast from other server {addr[0]} {addr[1]}, replying with Response code")
+                listen_socket.sendto(str.encode(f"I am a server _{addr[0]}_{SERVER_ADDRESS[1]}"), addr)
+                response_port_server0 = data.decode().split(' ')
+                response_port_server1 = [response_port_server0[:-1] for response_port_server0 in response_port_server0]
+                response_port_server = int(response_port_server1[1])
+                server_address1=(addr[0], response_port_server)
+                Shared.SERVER_LIST.append(server_address1)
+                send_server_list() # noch nicht programmiert?
                 print(f"Aktuelle Serverliste: {Shared.SERVER_LIST}")
-            if is_leader and data.startswith(Shared.BROADCAST_CODE_CLIENT.encode()):
-                print(f"Received Broadcast from {addr[0]}, replying with Response code")
+            if is_leader and data.startswith(Shared.BROADCAST_CODE_CLIENT.encode()): # found a client on the network!
+                print(f"Received Broadcast from a client {addr[0]}, replying with Response code")
                 listen_socket.sendto(str.encode(f"{Shared.BROADCAST_CODE_CLIENT}{addr[0]}_{SERVER_ADDRESS[1]}"), addr)
                 response_port_client = int(data.decode().split('_')[1])
                 client_adress = (addr[0], response_port_client)
@@ -93,7 +95,7 @@ def setup_leader(address):
     else:
         print("An other server acts as the leader")
 
-def connect_client():
+def connect_client(): # connects client, checks
 
     while True:
         try:
@@ -115,7 +117,7 @@ def connect_client():
     print('TCP listener closing')
     SERVER.close()
 
-def receive_client_message (client, addr):
+def receive_client_message (client, addr): # receive client messages on TCP port
     while True:
             data = client.recv(1024)
             msg=data.decode('utf-8')
@@ -124,7 +126,7 @@ def receive_client_message (client, addr):
                 Shared.CLIENT_MESSAGES.append(f'{SERVER_ADDRESS[0]}: New Message from client {addr[0]}: {msg}')
                 send_client_message(msg, addr)
 
-def send_client_message(msg, addr): # multicast sender
+def send_client_message(msg, addr): # server multicast client's message to all clients
     MULTICAST_TTL = 2
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
@@ -167,5 +169,4 @@ def find_neighbors():
 broadcast()
 threading.Thread(target=broadcast_listener).start()
 threading.Thread(target=connect_client).start()
-#threading.Thread(target=send_server_list).start()
-
+#threading.Thread(ta

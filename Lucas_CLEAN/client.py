@@ -7,7 +7,7 @@ import Shared
 
 client_socket = Shared.setup_client_socket()
 
-def client_broadcast():
+def client_broadcast(): # creates a broadcast socket for the client to find a chat server in the network
     global SERVER_ADRESS
 
     broadcast_socket=Shared.broadcast_socket(timeout=3)
@@ -30,7 +30,7 @@ def client_broadcast():
     broadcast_socket.close()
 
 
-def connect_with_server():
+def connect_with_server(): # connecto to server giving username, start chatting to server's TCP port
     global client_socket
     client_socket.connect(SERVER_ADRESS)
     client_address = client_socket.getsockname()
@@ -66,7 +66,7 @@ def check_leader():
             print (e)
             break
 
-def setup_multicast_listener():
+def setup_multicast_listener(): # client multicast listener to listen to chat messages from server
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(('', Shared.MCAST_PORT))

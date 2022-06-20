@@ -4,8 +4,8 @@ import threading
 
 SERVER_LIST=[]
 BROADCAST_PORT=10001
-BROADCAST_CODE = "<I am listening>"
-BROADCAST_CODE_CLIENT='<Can someone hear me?>'
+BROADCAST_CODE_SERVER = "isServer"
+BROADCAST_CODE_CLIENT= "isClient"
 CLIENT_LIST=[]
 CLIENT_MESSAGES=[]
 USER_LIST=[]
