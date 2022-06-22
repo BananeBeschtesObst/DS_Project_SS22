@@ -1,5 +1,6 @@
 import socket
 
+
 BROADCAST_PORT=10001
 
 
@@ -16,26 +17,28 @@ def unicast_TCP_listener():
     s.listen()
     return s
 
-def unicast_TCP_sender():
+def unicast_TCP_sender(msg, addr):
     transmit_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     transmit_socket.settimeout(1)
-    transmit_socket.connect(address)
-    transmit_socket.send(message)
+    transmit_socket.connect(addr)
+    transmit_socket.send(msg)
     transmit_socket.close()
 
 def broadcast_UDP_listener():
     s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     addr=(get_ip(),10001)
     s.bind(addr)
-    print(f"Listening on{s.getsockname()}")
     return s
 
-def broadcast_UDP_sender():
+def broadcast_UDP_sender(timeout=None):
     s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     addr=(get_ip(), 0)
     s.bind(addr)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-    print(f"Broadcast Sender on {s.getsockname()}")
+    if timeout:
+        s.settimeout(timeout)
     return s
 
 def multicast_UDP_listener():
@@ -49,3 +52,6 @@ def multicast_UDP_sender():
     s.settimeout(0.2)
     s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 32)
     return s
+
+def create_node (request_type, requester_type, addr):
+    return {'Request_Type': request_type, 'requester_type': requester_type, 'Address': addr}
