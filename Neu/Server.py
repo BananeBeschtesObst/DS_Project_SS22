@@ -33,10 +33,12 @@ def broadcast_sender():
         try:
             data, addr= broadcast_sender.recvfrom(1024)
             if data.startswith(BROADCASTCODE_SERVER_REPLY.encode()):
+
+                #Reply of the Server needs to be decoded in order to get the server address, that is needed for the join request
                 replying_Server_IP=data.decode().split('#')[1]
                 replying_Server_Port=data.decode().split('#')[2]
-                replying_Server_Port=int(replying_Server_Port)
-                reply_address=(replying_Server_IP, replying_Server_Port)
+                replying_Server_Port=int(replying_Server_Port)  #Port needs to be an integer
+                reply_address=(replying_Server_IP, replying_Server_Port)    #creating address for the request msg
                 reply=True      #Server has received an answer of an already active Server, which means he has to join the existing server group
                 msg=Shared.create_node('Join', 'Server', SERVER_ADDRESS)    #Creating Join Request that will be sent to the responding Server
                 Shared.unicast_TCP_sender(repr(msg).encode(), reply_address)     #Sending the join request per TCP to the responding Server
@@ -67,19 +69,20 @@ def broadcast_listener():
             pass
         else:
             if data.startswith(BROADCASTCODE_SERVER.encode()):
-                broadcast_listener.sendto(f'{BROADCASTCODE_SERVER_REPLY}#{SERVER_ADDRESS[0]}#{SERVER_ADDRESS[1]}'.encode(), addr)
+                broadcast_listener.sendto(f'{BROADCASTCODE_SERVER_REPLY}#{SERVER_ADDRESS[0]}#{SERVER_ADDRESS[1]}'.encode(), addr)       #Sending the broadcasting Server the Broadcast_Server_Reply Code and the Server Address, that is needed for the join request
 
 
 
 def tcp_sender():
     print()
 
+#Listener for incoming TCP Messages
 def tcp_listener():
-    while True:
 
+    while True:
         try:
-            data, addr= SERVER.accept()
-            recv_data=data.recv(1024)
+            data, addr= SERVER.accept()     #accept the TCP connection
+            recv_data=data.recv(1024)   #receive packages with buffer size of 1024
             print (recv_data.decode())
         except Exception as e:
             print (e)
