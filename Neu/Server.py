@@ -1,5 +1,6 @@
 import socket
 import Shared
+import threading
 
 BROADCASTCODE_SERVER='820734130907390'
 BROADCASTCODE_SERVER_REPLY='482168278318180'
@@ -28,17 +29,17 @@ def broadcast_sender():
         broadcast_sender.sendto(f'{BROADCASTCODE_SERVER},{SERVER_ADDRESS}'.encode(),br_addr)
         print(f'[SERVER] Sending broadcast message on [{br_addr[0]}, {br_addr[1]}]')
 
-
         #Waiting for answer of a Server
         try:
             data, addr= broadcast_sender.recvfrom(1024)
             if data.startswith(BROADCASTCODE_SERVER_REPLY.encode()):
-                print("Found Server on ", data.decode().split(','))
+                replying_Server_IP=data.decode().split('#')[1]
+                replying_Server_Port=data.decode().split('#')[2]
+                replying_Server_Port=int(replying_Server_Port)
+                reply_address=(replying_Server_IP, replying_Server_Port)
                 reply=True      #Server has received an answer of an already active Server, which means he has to join the existing server group
-
-                #response_port = int (data.decode().split('_')[2])
-                #Shared.SERVER_LIST.append(SERVER_ADDRESS)
-                #print(f"In der Liste ist/sind {len(Shared.SERVER_LIST)} Server")
+                msg=Shared.create_node('Join', 'Server', SERVER_ADDRESS)    #Creating Join Request that will be sent to the responding Server
+                Shared.unicast_TCP_sender(repr(msg).encode(), reply_address)     #Sending the join request per TCP to the responding Server
                 #leader_address=((addr[0], response_port))
                 #setup_leader(leader_address)
                 break
@@ -66,8 +67,26 @@ def broadcast_listener():
             pass
         else:
             if data.startswith(BROADCASTCODE_SERVER.encode()):
-                broadcast_listener.sendto(f'{BROADCASTCODE_SERVER_REPLY},{SERVER_ADDRESS}'.encode(), (addr))
+                broadcast_listener.sendto(f'{BROADCASTCODE_SERVER_REPLY}#{SERVER_ADDRESS[0]}#{SERVER_ADDRESS[1]}'.encode(), addr)
+
+
+
+def tcp_sender():
+    print()
+
+def tcp_listener():
+    while True:
+
+        try:
+            data, addr= SERVER.accept()
+            recv_data=data.recv(1024)
+            print (recv_data.decode())
+        except Exception as e:
+            print (e)
+        break
+
 
 if __name__ == '__main__':
     broadcast_sender()
-    broadcast_listener()
+    threading.Thread(target=broadcast_listener).start()
+    threading.Thread(target=tcp_listener).start()
