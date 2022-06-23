@@ -1,6 +1,7 @@
 import socket
 import Shared
 import threading
+import ast
 
 BROADCASTCODE_SERVER='820734130907390'
 BROADCASTCODE_SERVER_REPLY='482168278318180'
@@ -33,7 +34,6 @@ def broadcast_sender():
         try:
             data, addr= broadcast_sender.recvfrom(1024)
             if data.startswith(BROADCASTCODE_SERVER_REPLY.encode()):
-
                 #Reply of the Server needs to be decoded in order to get the server address, that is needed for the join request
                 replying_Server_IP=data.decode().split('#')[1]
                 replying_Server_Port=data.decode().split('#')[2]
@@ -68,7 +68,7 @@ def broadcast_listener():
             print(e)
             pass
         else:
-            if data.startswith(BROADCASTCODE_SERVER.encode()):
+            if data.startswith(BROADCASTCODE_SERVER.encode()) and ISLEADER is True:
                 broadcast_listener.sendto(f'{BROADCASTCODE_SERVER_REPLY}#{SERVER_ADDRESS[0]}#{SERVER_ADDRESS[1]}'.encode(), addr)       #Sending the broadcasting Server the Broadcast_Server_Reply Code and the Server Address, that is needed for the join request
 
 
@@ -78,17 +78,53 @@ def tcp_sender():
 
 #Listener for incoming TCP Messages
 def tcp_listener():
-
     while True:
         try:
             data, addr= SERVER.accept()     #accept the TCP connection
-            recv_data=data.recv(1024)   #receive packages with buffer size of 1024
-            print (recv_data.decode())
+            recv_data=data.recv(1024)  #receive packages with buffer size of 1024
+            msg=ast.literal_eval(recv_data.decode())
         except Exception as e:
             print (e)
-        break
+        else:
+            match msg:
+                case {'Request_Type': 'Join', 'requester_type': requester_type, 'Address': addr}:
+                    if requester_type == 'Server':
+                        global SERVER_LIST
+                        SERVER_LIST.extend(addr)
+                        print(f'Server List: {SERVER_LIST}')
+                        server_state=create_server_state()
+                        server_state=repr(server_state).encode()
+                        Shared.unicast_TCP_sender(server_state, addr)
+                case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}:
+                    SERVER_LIST=msg['Server_List']
+                    print(SERVER_LIST)
 
 
+
+def create_server_state():
+    server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}
+    return server_status
+
+
+    print()
+
+
+
+def server_handler(msg):
+    match msg:
+        case{'Request_Type': 'Join', 'requester_type': requester_type, 'Adddress': address}:
+            if requester_type=='Server':
+                #Multicast an Server
+
+                #Übertragung von Serverliste/Clientliste an joinenden Server
+                send_server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}
+                Shared.unicast_TCP_sender(send_server_status, address)
+
+            if requester_type=='Client':
+                print()
+                #Multicast an Clients
+
+    print()
 if __name__ == '__main__':
     broadcast_sender()
     threading.Thread(target=broadcast_listener).start()
