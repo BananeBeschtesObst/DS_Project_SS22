@@ -104,12 +104,14 @@ def tcp_listener():
                         #The other Servers need the updated Serverlist, therefore it is sent to every Server besides the Leader and the joining Server
                         for i in range(len(SERVER_LIST)):
                             if SERVER_LIST[i]!=addr_add and SERVER_LIST[i] != SERVER_ADDRESS:
+                                msg=f'[SERVER] The Server {addr_add} joined the server group'
+                                Shared.unicast_TCP_sender(server_state, SERVER_LIST[i])
                                 Shared.unicast_TCP_sender(server_state, SERVER_LIST[i])
 
 
                 case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}:
                     SERVER_LIST=msg['Server_List']
-                    print(SERVER_LIST)
+                    print(f'[SERVER] Received updated Server List {SERVER_LIST}')
 
 
 
