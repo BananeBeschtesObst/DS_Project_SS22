@@ -3,6 +3,9 @@ import Shared
 import threading
 import ast
 
+
+
+
 BROADCASTCODE_SERVER='820734130907390'
 BROADCASTCODE_SERVER_REPLY='482168278318180'
 
@@ -90,11 +93,20 @@ def tcp_listener():
                 case {'Request_Type': 'Join', 'requester_type': requester_type, 'Address': addr}:
                     if requester_type == 'Server':
                         global SERVER_LIST
-                        SERVER_LIST.extend(addr)
+                        addr_add= (addr[0], addr[1])
+                        print(addr_add)
+                        SERVER_LIST.append(addr_add)
                         print(f'Server List: {SERVER_LIST}')
                         server_state=create_server_state()     #Server state is created = Serverlist, Clientlist, etc to be sent to the joining Server
                         server_state=repr(server_state).encode()    #Message gets encoded for TCP MSG
-                        Shared.unicast_TCP_sender(server_state, addr)       #TCP MSG to joining Server
+                        Shared.unicast_TCP_sender(server_state, addr)   #TCP MSG to joining Server
+
+                        #The other Servers need the updated Serverlist, therefore it is sent to every Server besides the Leader and the joining Server
+                        for i in range(len(SERVER_LIST)):
+                            if SERVER_LIST[i]!=addr_add and SERVER_LIST[i] != SERVER_ADDRESS:
+                                Shared.unicast_TCP_sender(server_state, SERVER_LIST[i])
+
+
                 case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}:
                     SERVER_LIST=msg['Server_List']
                     print(SERVER_LIST)
