@@ -92,9 +92,9 @@ def tcp_listener():
                         global SERVER_LIST
                         SERVER_LIST.extend(addr)
                         print(f'Server List: {SERVER_LIST}')
-                        server_state=create_server_state()
-                        server_state=repr(server_state).encode()
-                        Shared.unicast_TCP_sender(server_state, addr)
+                        server_state=create_server_state()     #Server state is created = Serverlist, Clientlist, etc to be sent to the joining Server
+                        server_state=repr(server_state).encode()    #Message gets encoded for TCP MSG
+                        Shared.unicast_TCP_sender(server_state, addr)       #TCP MSG to joining Server
                 case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}:
                     SERVER_LIST=msg['Server_List']
                     print(SERVER_LIST)
