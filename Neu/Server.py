@@ -134,7 +134,11 @@ def create_server_state():
 
     print()
 
-
+#With this function each server can identify its neigbor based on the Serverlist that it received from the leader
+#The Serverlist is maintained by the leader
+#A Neigbor of a server is the server that is right to him in the list, the last server in the list has the server on
+#list[0] as neighbor, making it therefore a ring
+#The ring is used for leader election and hearbeat -> Crash fault tolerance
 def get_neighbor():
     global neighbor
     index=SERVER_LIST.index(SERVER_ADDRESS)
