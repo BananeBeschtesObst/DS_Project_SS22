@@ -55,3 +55,6 @@ def multicast_UDP_sender():
 
 def create_node (request_type, requester_type, addr):
     return {'Request_Type': request_type, 'requester_type': requester_type, 'Address': addr}    #request type e.g. "Join"; requester_type e.g. Server; Adress = Server or Client Adress
+
+def create_msg_node (msg_type, msg, addr):
+    return {'Message_Type': msg_type,'Message': msg, 'Address': addr}

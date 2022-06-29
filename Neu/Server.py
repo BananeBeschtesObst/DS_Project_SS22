@@ -15,6 +15,7 @@ SERVER_ADDRESS=SERVER.getsockname()
 
 SERVER_LIST=[SERVER_ADDRESS]
 CLIENT_LIST=[]
+SERVER_LIST_RING=[]
 
 ISLEADER=False
 
@@ -94,28 +95,39 @@ def tcp_listener():
                     if requester_type == 'Server':
                         global SERVER_LIST
                         addr_add= (addr[0], addr[1])
-                        print(addr_add)
-                        SERVER_LIST.append(addr_add)
-                        print(f'Server List: {SERVER_LIST}')
+                        print(f'[SERVER] Added Server: {addr_add} to the server list')
+
+                        if addr_add not in SERVER_LIST:     #No Duplicates in the Serverlist
+                            SERVER_LIST.append(addr_add)
                         server_state=create_server_state()     #Server state is created = Serverlist, Clientlist, etc to be sent to the joining Server
                         server_state=repr(server_state).encode()    #Message gets encoded for TCP MSG
                         Shared.unicast_TCP_sender(server_state, addr)   #TCP MSG to joining Server
 
+
                         #The other Servers need the updated Serverlist, therefore it is sent to every Server besides the Leader and the joining Server
                         for i in range(len(SERVER_LIST)):
                             if SERVER_LIST[i]!=addr_add and SERVER_LIST[i] != SERVER_ADDRESS:
-                                msg=f'[SERVER] The Server {addr_add} joined the server group'
+                                msg=Shared.create_msg_node('Server_Message', f'[SERVER] The Server {addr_add} joined the Server Group', SERVER_LIST[i])
+                                Shared.unicast_TCP_sender(repr(msg).encode(), SERVER_LIST[i])
                                 Shared.unicast_TCP_sender(server_state, SERVER_LIST[i])
-                                Shared.unicast_TCP_sender(server_state, SERVER_LIST[i])
+
+                        get_neighbor()
 
 
                 case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}:
                     SERVER_LIST=msg['Server_List']
-                    print(f'[SERVER] Received updated Server List {SERVER_LIST}')
+                    print(f'[SERVER] Received Server List {SERVER_LIST}')
+                    get_neighbor()
+
+                case{'Message_Type': 'Server_Message', 'Message': message, 'Address': addr}:
+                    serv_msg= msg['Message']
+                    print(serv_msg)
+
 
 
 
 def create_server_state():
+    SERVER_LIST.sort()
     server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}
     return server_status
 
@@ -123,23 +135,18 @@ def create_server_state():
     print()
 
 
+def get_neighbor():
+    global neighbor
+    index=SERVER_LIST.index(SERVER_ADDRESS)
+    neighbor= SERVER_LIST[0] if index+1 == len(SERVER_LIST) else SERVER_LIST[index+1]
+    print(f'My Neighbor is {neighbor}')
 
-def server_handler(msg):
-    match msg:
-        case{'Request_Type': 'Join', 'requester_type': requester_type, 'Adddress': address}:
-            if requester_type=='Server':
-                #Multicast an Server
 
-                #Übertragung von Serverliste/Clientliste an joinenden Server
-                send_server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}
-                Shared.unicast_TCP_sender(send_server_status, address)
-
-            if requester_type=='Client':
-                print()
-                #Multicast an Clients
-
+def heartbeat():
     print()
+
 if __name__ == '__main__':
     broadcast_sender()
     threading.Thread(target=broadcast_listener).start()
     threading.Thread(target=tcp_listener).start()
+    threading.Thread(target=heartbeat).start()
