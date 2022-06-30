@@ -25,6 +25,8 @@ IS_ACTIVE=True
 NEIGHBOR=None
 LEADER_ADDRESS=None
 
+VOTING=False
+
 
 #Sending Broadcasts to find other Servers/Clients
 def broadcast_sender():
@@ -227,6 +229,9 @@ def heartbeat():
                     elect_leader()
 
 def elect_leader():
+
+
+
     print()
 
 if __name__ == '__main__':
