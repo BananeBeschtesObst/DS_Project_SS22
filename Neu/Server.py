@@ -2,6 +2,8 @@ import socket
 import Shared
 import threading
 import ast
+from time import sleep
+
 
 
 
@@ -18,7 +20,10 @@ CLIENT_LIST=[]
 SERVER_LIST_RING=[]
 
 ISLEADER=False
+IS_ACTIVE=True
 
+NEIGHBOR=None
+LEADER_ADDRESS=None
 
 
 #Sending Broadcasts to find other Servers/Clients
@@ -53,8 +58,9 @@ def broadcast_sender():
             pass
 
     if reply==False:
-        global ISLEADER
+        global ISLEADER, LEADER_ADDRESS
         ISLEADER=True
+        LEADER_ADDRESS=SERVER_ADDRESS
         print ('[SERVER] I am the leader')
 
 
@@ -123,12 +129,24 @@ def tcp_listener():
                     serv_msg= msg['Message']
                     print(serv_msg)
 
+                case{'Request_Type': 'Ping', 'requester_type': 'Server', 'Address': addr}:
+                    print(f'ping from {msg["Address"]}')
+
+                case {'Request_Type': 'Left', 'requester_type': 'Server', 'Address': addr}:
+                    print('JAAAA')
+                    SERVER_LIST.remove(addr)
+                    server_state = create_server_state()
+                    for i in range(len(SERVER_LIST)):
+                        if SERVER_LIST[i] != LEADER_ADDRESS:
+                            Shared.unicast_TCP_sender(server_state, SERVER_LIST[i])
+
+
 
 
 
 def create_server_state():
     SERVER_LIST.sort()
-    server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST}
+    server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': LEADER_ADDRESS}
     return server_status
 
 
@@ -140,13 +158,40 @@ def create_server_state():
 #list[0] as neighbor, making it therefore a ring
 #The ring is used for leader election and hearbeat -> Crash fault tolerance
 def get_neighbor():
-    global neighbor
+    global NEIGHBOR
     index=SERVER_LIST.index(SERVER_ADDRESS)
-    neighbor= SERVER_LIST[0] if index+1 == len(SERVER_LIST) else SERVER_LIST[index+1]
-    print(f'My Neighbor is {neighbor}')
+    NEIGHBOR= SERVER_LIST[0] if index+1 == len(SERVER_LIST) else SERVER_LIST[index+1]
+    print(f'My Neighbor is {NEIGHBOR}')
 
 
 def heartbeat():
+    missed_beats=0
+
+    while IS_ACTIVE:
+        if NEIGHBOR:
+            try:
+                msg=Shared.create_node('Ping', 'Server', SERVER_ADDRESS)
+                Shared.unicast_TCP_sender(repr(msg).encode(), NEIGHBOR)
+                sleep(2)
+            except (ConnectionRefusedError, TimeoutError):
+                missed_beats+=1
+                print(f'missed beats= {missed_beats}')
+            if missed_beats>5:
+                print(f"[SERVER] The Server {NEIGHBOR} isnt responding, Server is getting removed")
+                msg_del_server= Shared.create_node('Left', 'Server', NEIGHBOR)
+                if SERVER_ADDRESS !=LEADER_ADDRESS:
+                    Shared.unicast_TCP_sender(repr(msg_del_server).encode(), LEADER_ADDRESS)
+                else:
+                    print(SERVER_LIST)
+                    SERVER_LIST.remove(NEIGHBOR)
+                    missed_beats=0
+                    server_state = create_server_state()
+                    for i in range(len(SERVER_LIST)):
+                        if SERVER_LIST[i] != LEADER_ADDRESS:
+                            Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+                    get_neighbor()
+
+
     print()
 
 if __name__ == '__main__':
