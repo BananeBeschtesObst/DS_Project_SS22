@@ -1,7 +1,11 @@
 import socket
+import struct
 
 
 BROADCAST_PORT=10001
+
+MCAST_SERVER_GRP = '224.1.1.1'
+MCAST_SERVER_PORT = 5007
 
 
 
@@ -12,7 +16,7 @@ def get_ip():
 
 def unicast_TCP_listener():
     s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    addr=(get_ip(),0)
+    addr=(get_ip(),10070)
     s.bind(addr)
     s.listen()
     return s
@@ -42,10 +46,13 @@ def broadcast_UDP_sender(timeout=None):
     return s
 
 def multicast_UDP_listener():
-    s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     addr=(get_ip(), 0)
-    s.bind(addr)
-    return s
+    sock.bind(MCAST_SERVER_GRP,MCAST_SERVER_PORT)
+    mreq = struct.pack("4sl", socket.inet_aton(MCAST_SERVER_GRP), socket.INADDR_ANY)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    return sock
 
 def multicast_UDP_sender():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

@@ -128,10 +128,12 @@ def tcp_listener():
                         get_neighbor()
 
 
-                case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': leader_address, 'Sender': address}:
+                case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': leader_address, 'Sender': address, 'Voting': voting}:
                     global LEADER_ADDRESS
+                    sleep(1)
                     SERVER_LIST=msg['Server_List']
                     LEADER_ADDRESS=msg['Leader_Address']
+                    VOTING=msg['Voting']
                     print(f'[SERVER] Received Server List {SERVER_LIST} from {msg["Sender"]}')
                     print(f'The leader is {LEADER_ADDRESS}')
                     get_neighbor()
@@ -142,6 +144,7 @@ def tcp_listener():
 
                 case{'Request_Type': 'Ping', 'requester_type': 'Server', 'Address': addr}:
                     print(f'ping from {msg["Address"]}')
+                    test=0
 
 
                 #As soon as a server is removed, the leader checks with the other servers if everybody else is still
@@ -159,22 +162,12 @@ def tcp_listener():
                 #Another Server with a lower ID startet an election and is sending a Voting msg to this server
                 #This Server - if active - then replies
                 case{'Request_type': 'Voting', 'Address': addr}:
-                    vote_reply=Shared.create_vote_msg('Reply', SERVER_ADDRESS)
-                    Shared.unicast_TCP_sender(repr(vote_reply).encode(), addr)
                     elect_leader()
-
-
-
-
-
-
-
-
 
 
 def create_server_state():
     SERVER_LIST.sort()
-    server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': LEADER_ADDRESS, 'Sender': SERVER_ADDRESS}
+    server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': LEADER_ADDRESS, 'Sender': SERVER_ADDRESS, "Voting": VOTING}
     return server_status
 
 
@@ -246,31 +239,26 @@ def heartbeat():
                         print()
                         SERVER_LIST.remove(NEIGHBOR)
                         LEADER_ADDRESS=''
+                        VOTING=True
                         server_state = create_server_state()
-                        print(f'New Serverlist is {SERVER_LIST}')
                         if len(SERVER_LIST) > 1:
                             for i in range(len(SERVER_LIST)):
                                 if SERVER_LIST[i] != SERVER_ADDRESS:
                                     Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
-                        print(f'The disconnected Server {NEIGHBOR} was the leader, starting a new election')
+                        print(f'[SERVER] The disconnected Server {NEIGHBOR} was the leader, starting a new election')
                         elect_leader()
                         get_neighbor()
 
 def elect_leader():
     global NEIGHBOR, ISLEADER, LEADER_ADDRESS, VOTING
     if len(SERVER_LIST)==1:
-        print('test')
-        LEADER_ADDRESS=SERVER_ADDRESS
-        ISLEADER=True
-        print('I am the leader')
-        #msg= Shared.create_vic_msg('Victory', SERVER_ADDRESS,True, NEIGHBOR)
-        #Shared.unicast_TCP_sender(repr(msg).encode(), NEIGHBOR)
+        victory()
         return
 
     VOTING=True     #If the serverlist isnt just 1 server, Voting is set to be true, so heartbeat is stopped while the election takes place
     count=0     #Count is relevant for the replies of the servers with an higher ID
     server_with_higher_id=[i for i in SERVER_LIST if i>SERVER_ADDRESS]      #This Server is making a list with every Server in the Serverlist that has a higher ID that itself
-    print(f'Sending my election msg to every Server with a higher ID {server_with_higher_id}')
+    print(f'[SERVER] Sending my election msg to every Server with a higher ID {server_with_higher_id}')
     if len(server_with_higher_id)>0:   #Only if there is a server with a higher ID
 
         vote_msg=Shared.create_vote_msg('Voting', SERVER_ADDRESS)       #Voting msg is created
@@ -279,19 +267,32 @@ def elect_leader():
         for i in range(len(server_with_higher_id)):
             try:
                 Shared.unicast_TCP_sender(repr(vote_msg).encode(), server_with_higher_id[i])    #TCP msg sent to each
-            except TimeoutError:    #If there is a Timeouterror, we assume the server isnt online
+            except TimeoutError:    #If there is a Timeouterror, we assume the server isnt online, when the connection works we assume the server is online and received the message
                 count=+1
         if count==len(server_with_higher_id):   #If there is no connection possible with every server with a higher IP
-            print('No Server with a hihgher ID is responding, so i declare myself Leader')  #Server declares itself leader
-            LEADER_ADDRESS = SERVER_ADDRESS
-            ISLEADER = True
+            print('[SERVER] No Server with a hihgher ID is responding, so i declare myself Leader')  #Server declares itself leader
+            victory()
             return
     else:
-        print('There is no Server with a higher ID, therefore I am declaring myself Leader')
-        LEADER_ADDRESS = SERVER_ADDRESS
-        ISLEADER = True
-        print('I am the new leader')
+        print('[SERVER] There is no Server with a higher ID, therefore I am declaring myself Leader')
+        victory()
 
+def victory():
+    global ISLEADER, LEADER_ADDRESS, VOTING
+    LEADER_ADDRESS=SERVER_ADDRESS
+    ISLEADER=True
+    print('[LEADER] I am the new leader')
+    VOTING=False
+    server_state=create_server_state()
+    vic_msg = Shared.create_msg_node("Victory", f"{SERVER_ADDRESS} won the election and is the new leader",
+                                     SERVER_ADDRESS)
+
+    print('[LEADER] Sending the latest server state to each of my members and starting heartbeat')
+
+    for i in range(len(SERVER_LIST)):
+        if SERVER_LIST[i] != SERVER_ADDRESS:
+            Shared.unicast_TCP_sender(repr(vic_msg).encode(), SERVER_LIST[i])
+            Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
 
 
 
