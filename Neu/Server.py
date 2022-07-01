@@ -84,15 +84,18 @@ def broadcast_listener():
                 broadcast_listener.sendto(f'{BROADCASTCODE_SERVER_REPLY}#{SERVER_ADDRESS[0]}#{SERVER_ADDRESS[1]}'.encode(), addr)       #Sending the broadcasting Server the Broadcast_Server_Reply Code and the Server Address, that is needed for the join request
 
 
+def multicast_sender():
+    clock=0
 
-def tcp_sender():
+
+def multicast_listener():
     print()
 
 #Listener for incoming TCP Messages
 def tcp_listener():
     global VOTING
     SERVER.settimeout(2)
-
+    print(f'Starting Server on {SERVER_ADDRESS}')
     while True:
         try:
             data, addr= SERVER.accept()     #accept the TCP connection
@@ -125,11 +128,11 @@ def tcp_listener():
                         get_neighbor()
 
 
-                case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': leader_address}:
+                case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': leader_address, 'Sender': address}:
                     global LEADER_ADDRESS
                     SERVER_LIST=msg['Server_List']
                     LEADER_ADDRESS=msg['Leader_Address']
-                    print(f'[SERVER] Received Server List {SERVER_LIST}')
+                    print(f'[SERVER] Received Server List {SERVER_LIST} from {msg["Sender"]}')
                     print(f'The leader is {LEADER_ADDRESS}')
                     get_neighbor()
 
@@ -171,7 +174,7 @@ def tcp_listener():
 
 def create_server_state():
     SERVER_LIST.sort()
-    server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': LEADER_ADDRESS}
+    server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': LEADER_ADDRESS, 'Sender': SERVER_ADDRESS}
     return server_status
 
 
@@ -197,7 +200,7 @@ def get_neighbor():
 #the fault tolerance procedure
 #If its a normal server that disconnected (not the leader) then start a new leader election
 def heartbeat():
-    global NEIGHBOR, VOTING
+    global NEIGHBOR, VOTING, LEADER_ADDRESS
     missed_beats=0
 
     while IS_ACTIVE:
@@ -240,19 +243,23 @@ def heartbeat():
                     #If a server discovers that the not responding server is the leader, a new leader election is startet
                     #to deal with the problem
                     if NEIGHBOR==LEADER_ADDRESS:
+                        print()
                         SERVER_LIST.remove(NEIGHBOR)
+                        LEADER_ADDRESS=''
+                        server_state = create_server_state()
                         print(f'New Serverlist is {SERVER_LIST}')
                         if len(SERVER_LIST) > 1:
                             for i in range(len(SERVER_LIST)):
-                                if SERVER_LIST[i] != LEADER_ADDRESS:
+                                if SERVER_LIST[i] != SERVER_ADDRESS:
                                     Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
-                        get_neighbor()
                         print(f'The disconnected Server {NEIGHBOR} was the leader, starting a new election')
                         elect_leader()
+                        get_neighbor()
 
 def elect_leader():
     global NEIGHBOR, ISLEADER, LEADER_ADDRESS, VOTING
     if len(SERVER_LIST)==1:
+        print('test')
         LEADER_ADDRESS=SERVER_ADDRESS
         ISLEADER=True
         print('I am the leader')
@@ -279,6 +286,12 @@ def elect_leader():
             LEADER_ADDRESS = SERVER_ADDRESS
             ISLEADER = True
             return
+    else:
+        print('There is no Server with a higher ID, therefore I am declaring myself Leader')
+        LEADER_ADDRESS = SERVER_ADDRESS
+        ISLEADER = True
+        print('I am the new leader')
+
 
 
 
