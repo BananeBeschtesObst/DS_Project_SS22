@@ -58,3 +58,6 @@ def create_node (request_type, requester_type, addr):
 
 def create_msg_node (msg_type, msg, addr):
     return {'Message_Type': msg_type,'Message': msg, 'Address': addr}
+
+def create_vote_msg(type, addr):
+    return{'Request_type': type, 'Address': addr}
