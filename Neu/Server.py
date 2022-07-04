@@ -95,6 +95,7 @@ def multicast_listener():
 def tcp_listener():
     global VOTING
     SERVER.settimeout(2)
+    used=False
     print(f'Starting Server on {SERVER_ADDRESS}')
     while True:
         try:
@@ -116,6 +117,8 @@ def tcp_listener():
                         server_state=create_server_state()     #Server state is created = Serverlist, Clientlist, etc to be sent to the joining Server
                         server_state=repr(server_state).encode()    #Message gets encoded for TCP MSG
                         Shared.unicast_TCP_sender(server_state, addr)   #TCP MSG to joining Server
+                        print(f'Die Aktuelle Serverliste ist: {SERVER_LIST}')
+
 
 
                         #The other Servers need the updated Serverlist, therefore it is sent to every Server besides the Leader and the joining Server
@@ -130,7 +133,6 @@ def tcp_listener():
 
                 case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': leader_address, 'Sender': address, 'Voting': voting}:
                     global LEADER_ADDRESS
-                    sleep(1)
                     SERVER_LIST=msg['Server_List']
                     LEADER_ADDRESS=msg['Leader_Address']
                     VOTING=msg['Voting']
@@ -149,21 +151,23 @@ def tcp_listener():
 
                 #As soon as a server is removed, the leader checks with the other servers if everybody else is still
                 #there -> to be implemented with Multicast
-                case {'Request_Type': 'Left', 'requester_type': 'Server', 'Address': addr}:
-                    SERVER_LIST.remove(addr)
+                case {'Request_Type': 'Left', 'requester_type': 'Server', 'Address': address}:
+                    sleep(1)
+                    SERVER_LIST.remove(address)
                     server_state = create_server_state()
+                    print(f'The current serverlist is: {SERVER_LIST}; The server {address} was removed from the serverlist')
                     for i in range(len(SERVER_LIST)):
                         if SERVER_LIST[i] != LEADER_ADDRESS:
                             try:
                                 Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
                             except TimeoutError as e:
-                                print(e)
+                                pass
 
                 #Another Server with a lower ID startet an election and is sending a Voting msg to this server
                 #This Server - if active - then replies
                 case{'Request_type': 'Voting', 'Address': addr}:
                     elect_leader()
-
+        used=False
 
 def create_server_state():
     SERVER_LIST.sort()
@@ -195,8 +199,9 @@ def get_neighbor():
 def heartbeat():
     global NEIGHBOR, VOTING, LEADER_ADDRESS
     missed_beats=0
-
+    new_leader_elected=False
     while IS_ACTIVE:
+        new_leader_elected=False
         if VOTING==False:
             if NEIGHBOR:    #Heartbeat only starts if there is a neighbor
                 try:
@@ -216,27 +221,66 @@ def heartbeat():
                     #The leader who receives this msg takes care of the needed maintanance (delete not responding server
                     #from serverlist. Leader creates mew serverstate and sends it to the still active servers.
                     #The other servers receive the Status msg and also identify the new neighbor in the latest serverlist
+
+
                     if SERVER_ADDRESS !=LEADER_ADDRESS and NEIGHBOR != LEADER_ADDRESS:
-                        Shared.unicast_TCP_sender(repr(msg_del_server).encode(), LEADER_ADDRESS)
+                        count=0
+                        while count<2:
+                            try:
+                                Shared.unicast_TCP_sender(repr(msg_del_server).encode(), LEADER_ADDRESS)
+                                count=3
+                            except TimeoutError as t:
+                                print(f'{t} while trying to communicate with the leader')
+                                count+=1
+                                print(f'Count: {count}')
+                            if count==2:
+                                print('Cant reach leader - Starting new leader election')
+                                SERVER_LIST.remove(LEADER_ADDRESS)
+                                SERVER_LIST.remove(NEIGHBOR)
+                                LEADER_ADDRESS = ''
+                                VOTING = True
+                                server_state = create_server_state()
+                                if len(SERVER_LIST) > 1:
+                                    for i in range(len(SERVER_LIST)):
+                                        if SERVER_LIST[i] != SERVER_ADDRESS:
+                                            try:
+                                                Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+                                            except TimeoutError as t:
+                                                print(t)
+                                print(
+                                    f'[SERVER] The disconnected Server {NEIGHBOR} was the leader, starting a new election')
+                                elect_leader()
+                                get_neighbor()
+                                new_leader_elected=True
+                                missed_beats=0
+
+
+
 
                     #If the server who discovers the disconnect of its neighbor is the leader himself he takes care of the
                     #maintanance here (because it wouldnt make sense to send himself a tcp to do that and i think probably
                     #not possible)
-                    if SERVER_ADDRESS==LEADER_ADDRESS:
+                    if SERVER_ADDRESS==LEADER_ADDRESS and new_leader_elected==False:
                         SERVER_LIST.remove(NEIGHBOR)
+                        print(f'The current serverlist is: {SERVER_LIST}; The server {NEIGHBOR} was removed from the serverlist')
+
                         server_state = create_server_state()
                         if len(SERVER_LIST) > 1:
                             for i in range(len(SERVER_LIST)):
                                 if SERVER_LIST[i] != LEADER_ADDRESS:
-                                    Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+
+                                    try:
+                                        Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+                                    except TimeoutError as t:
+                                        print(t)
+
                             get_neighbor()
                         else:
                             NEIGHBOR=None
-
+                            get_neighbor()
                     #If a server discovers that the not responding server is the leader, a new leader election is startet
                     #to deal with the problem
                     if NEIGHBOR==LEADER_ADDRESS:
-                        print()
                         SERVER_LIST.remove(NEIGHBOR)
                         LEADER_ADDRESS=''
                         VOTING=True
@@ -244,7 +288,10 @@ def heartbeat():
                         if len(SERVER_LIST) > 1:
                             for i in range(len(SERVER_LIST)):
                                 if SERVER_LIST[i] != SERVER_ADDRESS:
-                                    Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+                                    try:
+                                        Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+                                    except TimeoutError as t:
+                                        print(t)
                         print(f'[SERVER] The disconnected Server {NEIGHBOR} was the leader, starting a new election')
                         elect_leader()
                         get_neighbor()
@@ -288,11 +335,14 @@ def victory():
                                      SERVER_ADDRESS)
 
     print('[LEADER] Sending the latest server state to each of my members and starting heartbeat')
-
+    print(f'The current serverlist is: {SERVER_LIST}')
     for i in range(len(SERVER_LIST)):
         if SERVER_LIST[i] != SERVER_ADDRESS:
-            Shared.unicast_TCP_sender(repr(vic_msg).encode(), SERVER_LIST[i])
-            Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+            try:
+                Shared.unicast_TCP_sender(repr(vic_msg).encode(), SERVER_LIST[i])
+                Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+            except TimeoutError as t:
+                print(t)
 
 
 

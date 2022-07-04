@@ -16,7 +16,7 @@ def get_ip():
 
 def unicast_TCP_listener():
     s=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    addr=(get_ip(),10070)
+    addr=(get_ip(),0)
     s.bind(addr)
     s.listen()
     return s
