@@ -100,14 +100,15 @@ def tcp_listener():
     while True:
         try:
             data, addr= SERVER.accept()     #accept the TCP connection
-            recv_data=data.recv(1024)  #receive packages with buffer size of 1024
+            recv_data=data.recv(4096)  #receive packages with buffer size of 1024
             msg=ast.literal_eval(recv_data.decode())
         except TimeoutError as e:
             pass
         else:
+            global LEADER_ADDRESS
             match msg:
                 case {'Request_Type': 'Join', 'requester_type': requester_type, 'Address': addr}:
-                    if requester_type == 'Server':
+                    if requester_type == 'Server' and SERVER_ADDRESS==LEADER_ADDRESS:
                         global SERVER_LIST
                         addr_add= (addr[0], addr[1])
                         print(f'[SERVER] Added Server: {addr_add} to the server list')
@@ -130,9 +131,14 @@ def tcp_listener():
 
                         get_neighbor()
 
+                    if requester_type == 'Client' and SERVER_ADDRESS==LEADER_ADDRESS:
+                        global CLIENT_LIST
+                        addr_add_client= (addr[0], addr[1])
+                        print(f'[SERVER] Added Client: {addr_add_client} to the server list')
 
-                case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': leader_address, 'Sender': address, 'Voting': voting}:
-                    global LEADER_ADDRESS
+
+
+                case {'Status': 'Status', 'Server_List': server_list, 'Client_List': client_list, 'Leader_Address': leader_address, 'Sender': address, 'Voting': voting}:
                     SERVER_LIST=msg['Server_List']
                     LEADER_ADDRESS=msg['Leader_Address']
                     VOTING=msg['Voting']
@@ -152,22 +158,24 @@ def tcp_listener():
                 #As soon as a server is removed, the leader checks with the other servers if everybody else is still
                 #there -> to be implemented with Multicast
                 case {'Request_Type': 'Left', 'requester_type': 'Server', 'Address': address}:
-                    sleep(1)
-                    SERVER_LIST.remove(address)
-                    server_state = create_server_state()
-                    print(f'The current serverlist is: {SERVER_LIST}; The server {address} was removed from the serverlist')
-                    for i in range(len(SERVER_LIST)):
-                        if SERVER_LIST[i] != LEADER_ADDRESS:
-                            try:
-                                Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
-                            except TimeoutError as e:
-                                pass
+                    if SERVER_ADDRESS==LEADER_ADDRESS:
+                        sleep(1)
+                        SERVER_LIST.remove(address)
+                        server_state = create_server_state()
+                        print(f'The current serverlist is: {SERVER_LIST}; The server {address} was removed from the serverlist')
+                        for i in range(len(SERVER_LIST)):
+                            if SERVER_LIST[i] != LEADER_ADDRESS:
+                                try:
+                                    Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+                                except TimeoutError as e:
+                                    pass
 
                 #Another Server with a lower ID startet an election and is sending a Voting msg to this server
                 #This Server - if active - then replies
                 case{'Request_type': 'Voting', 'Address': addr}:
                     elect_leader()
-        used=False
+
+
 
 def create_server_state():
     SERVER_LIST.sort()
