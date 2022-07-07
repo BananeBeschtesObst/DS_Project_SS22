@@ -3,8 +3,4 @@
 *.xml
 *.pyc
 *.iml
-Lucas_CLEAN/.idea/runConfigurations/client.xml
-Lucas_CLEAN/__pycache__/Shared.cpython-310.pyc
-Lucas_CLEAN/__pycache__/Shared.cpython-310.pyc
-Lucas_CLEAN/.idea/Lucas.iml
 *.iml
