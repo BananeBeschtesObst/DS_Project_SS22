@@ -343,7 +343,10 @@ def heartbeat():
 
                         for i in range(len(CLIENT_LIST)):
                             client_msg=Shared.create_msg_node('Leader_Crash', 'The Leader crashed, a new leader is elected, you can soon start chatting again',SERVER_ADDRESS)
-                            Shared.unicast_TCP_sender(repr(client_msg).encode(), CLIENT_LIST[i])
+                            try:
+                                Shared.unicast_TCP_sender(repr(client_msg).encode(), CLIENT_LIST[i])
+                            except:
+                                pass
                         SERVER_LIST.remove(NEIGHBOR)
                         LEADER_ADDRESS=''
                         VOTING=True
@@ -394,7 +397,7 @@ def victory():
     print('[LEADER] I am the new leader')
     VOTING=False
     server_state=create_server_state()
-    vic_msg = Shared.create_msg_node("Victory", f"{SERVER_ADDRESS} won the election and is the new leader",
+    vic_msg = Shared.create_msg_node("Victory", f"[VICTORY]: {SERVER_ADDRESS} won the election and is the new leader",
                                      SERVER_ADDRESS)
 
     print('[LEADER] Sending the latest server state to each of my members and starting heartbeat')
