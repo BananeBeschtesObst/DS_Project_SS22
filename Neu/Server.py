@@ -156,15 +156,19 @@ def tcp_listener():
                         VOTING=msg['Voting']
                         CLOCK=msg['Message_Clock']
 
-                        print(f'[SERVER] Received Server List {SERVER_LIST} from {msg["Sender"]}')
-                        print(f'[SERVER] Received Client List {CLIENT_LIST} from {msg["Sender"]}')
-                        print(f'The leader is {LEADER_ADDRESS}')
+                        #print(f'[SERVER] Received Server List {SERVER_LIST} from {msg["Sender"]}')
+                        #print(f'[SERVER] Received Client List {CLIENT_LIST} from {msg["Sender"]}')
+                        #print(f'The leader is {LEADER_ADDRESS}')
+                        print(f'Received current Server state')
                         get_neighbor()
 
-                case{'Message_Type': 'Server_Message', 'Message': message, 'Address': addr}:
-                    serv_msg= msg['Message']
-                    print(serv_msg)
-
+                case{'Message_Type': server_message, 'Message': message, 'Address': addr}:
+                    if server_message=='Server_Message':
+                        serv_msg= msg['Message']
+                        print(serv_msg)
+                    if server_message == 'Victory':
+                        serv_msg = msg['Message']
+                        print(serv_msg)
                 case{'Request_Type': 'Ping', 'requester_type': 'Server', 'Address': addr}:
                     print(f'ping from {msg["Address"]}')
                     test=0
