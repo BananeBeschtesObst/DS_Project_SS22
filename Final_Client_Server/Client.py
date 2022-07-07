@@ -69,7 +69,6 @@ def connect_with_server(): # connecto to server giving username, start chatting 
                 print('Your message is too long')
             else:
                 client_msg= Shared.create_chat_msg_node('Chat', msg , USERNAME, CLIENT_ADDRESS, clock)
-                print(client_msg, SERVER_ADDRESS)
                 try:
                     Shared.unicast_TCP_sender(repr(client_msg).encode(), SERVER_ADDRESS)
                 except (ConnectionRefusedError, TimeoutError):
