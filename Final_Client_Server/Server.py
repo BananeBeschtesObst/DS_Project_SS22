@@ -197,6 +197,7 @@ def tcp_listener():
                     if server_message == 'Victory':
                         serv_msg = msg['Message']
                         print(serv_msg)
+
                 case{'Request_Type': 'Ping', 'requester_type': 'Server', 'Address': addr}:
                     print(f'ping from {msg["Address"]}')
                     test=0
