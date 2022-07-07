@@ -105,16 +105,45 @@ def tcp_listener():
             data, addr= SERVER.accept()     #accept the TCP connection
             recv_data=data.recv(4096)  #receive packages with buffer size of 1024
             msg=ast.literal_eval(recv_data.decode())
-
         except TimeoutError as e:
             pass
         else:
-            global LEADER_ADDRESS, CLOCK, MESSAGE_LIST, CLIENT_LIST
-
+            global LEADER_ADDRESS, CLOCK, MESSAGE_LIST, CLIENT_LIST, SERVER_LIST
             match msg:
+                case {'Message_Type': 'Chat','Username':username,'Message': message, 'Address': addr, 'Clock':clock}:
+                    if SERVER_ADDRESS == LEADER_ADDRESS:
+                        CLOCK += 1
+                        msg['Clock'] = CLOCK
+                        name = msg['Username']
+                        msg_enc = msg['Message']
+                        client_msg = f'{name}: {msg_enc}'
+                        MESSAGE_LIST.append(msg)
+                        print(MESSAGE_LIST)
+                        send_client_msg(msg)
+
+                        # I need to create a new server state as soon as a message of the clients is received, so that every server keeps track of the new messages.
+                        # Otherwise if the server crashes, the other server maybe dont have all messages in the Message List
+                        server_state = create_server_state()
+                        for i in range(len(SERVER_LIST)):
+                            if SERVER_LIST[i] != LEADER_ADDRESS:
+                                try:
+                                    Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+                                except TimeoutError as e:
+                                    pass
+
+                case {'Message_Type': 'User', 'Username': username, 'Message': message, 'Address': address,
+                      'Clock': clock}:
+                    msg_client = Shared.create_msg_node('Join', f'{[msg["Username"]]} joined the chat room',
+                                                        SERVER_ADDRESS)
+                    for i in range(len(CLIENT_LIST)):
+                        if CLIENT_LIST[i] != msg['Address']:
+                            try:
+                                Shared.unicast_TCP_sender(repr(msg_client).encode(), CLIENT_LIST[i])
+                            except TimeoutError:
+                                pass
+
                 case {'Request_Type': 'Join', 'requester_type': requester_type, 'Address': addr}:
                     if requester_type == 'Server' and SERVER_ADDRESS==LEADER_ADDRESS:
-                        global SERVER_LIST
                         addr_add= (addr[0], addr[1])
                         print(f'[SERVER] Added Server: {addr_add} to the server list')
 
@@ -136,7 +165,6 @@ def tcp_listener():
                         get_neighbor()
 
                     if requester_type == 'Client' and SERVER_ADDRESS==LEADER_ADDRESS:
-                        global CLIENT_LIST
                         addr_add_client= (addr[0], addr[1])
                         print(f'[SERVER] Added Client: {addr_add_client} to the client list')
                         if addr_add_client not in CLIENT_LIST:
@@ -193,37 +221,6 @@ def tcp_listener():
                 #This Server - if active - then replies
                 case{'Request_type': 'Voting', 'Address': addr}:
                     elect_leader()
-
-                case {'Message_Type': 'Chat','Username':username,'Message': message, 'Address': addr, 'Clock':clock}:
-                    if SERVER_ADDRESS==LEADER_ADDRESS:
-                        CLOCK+=1
-                        msg['Clock']=CLOCK
-                        name=msg['Username']
-                        msg_enc=msg['Message']
-                        client_msg=f'{name}: {msg_enc}'
-                        MESSAGE_LIST.append(msg)
-                        print(MESSAGE_LIST)
-                        send_client_msg(msg)
-
-                        #I need to create a new server state as soon as a message of the clients is received, so that every server keeps track of the new messages.
-                        #Otherwise if the server crashes, the other server maybe dont have all messages in the Message List
-                        server_state = create_server_state()
-                        for i in range(len(SERVER_LIST)):
-                            if SERVER_LIST[i] != LEADER_ADDRESS:
-                                try:
-                                    Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
-                                except TimeoutError as e:
-                                    pass
-
-                case{'Message_Type': 'User', 'Username': username, 'Message': message, 'Address': address,
-                         'Clock': clock}:
-                    msg_client = Shared.create_msg_node('Join', f'{[msg["Username"]]} joined the chat room', SERVER_ADDRESS)
-                    for i in range(len(CLIENT_LIST)):
-                        if CLIENT_LIST[i] != msg['Address']:
-                            try:
-                                Shared.unicast_TCP_sender(repr(msg_client).encode(), CLIENT_LIST[i])
-                            except TimeoutError:
-                                pass
 
 
 
