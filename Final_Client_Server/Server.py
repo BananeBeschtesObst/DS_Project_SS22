@@ -110,6 +110,9 @@ def tcp_listener():
         else:
             global LEADER_ADDRESS, CLOCK, MESSAGE_LIST, CLIENT_LIST, SERVER_LIST
             match msg:
+                #Receiving TCP Nodes from the Client with the chat message from the client.
+                #Clock is used because I always received 2 UDP Messages and I need the clock to look on the Client side
+                #if the message was already sent
                 case {'Message_Type': 'Chat','Username':username,'Message': message, 'Address': addr, 'Clock':clock}:
                     if SERVER_ADDRESS == LEADER_ADDRESS:
                         CLOCK += 1
@@ -118,7 +121,7 @@ def tcp_listener():
                         msg_enc = msg['Message']
                         client_msg = f'{name}: {msg_enc}'
                         MESSAGE_LIST.append(msg)
-                        print(MESSAGE_LIST)
+                        print(f'Message Number {CLOCK}: Message of {name} received and appended to the message list')
                         send_client_msg(msg)
 
                         # I need to create a new server state as soon as a message of the clients is received, so that every server keeps track of the new messages.
@@ -131,6 +134,7 @@ def tcp_listener():
                                 except TimeoutError as e:
                                     pass
 
+                #Informing every Client in te chat that a new participant joined
                 case {'Message_Type': 'User', 'Username': username, 'Message': message, 'Address': address,
                       'Clock': clock}:
                     msg_client = Shared.create_msg_node('Join', f'{[msg["Username"]]} joined the chat room',
@@ -142,6 +146,8 @@ def tcp_listener():
                             except TimeoutError:
                                 pass
 
+                #Handling the join requests of Clients and Servers
+                #Putting them in the respective lists and sending them the current server state
                 case {'Request_Type': 'Join', 'requester_type': requester_type, 'Address': addr}:
                     if requester_type == 'Server' and SERVER_ADDRESS==LEADER_ADDRESS:
                         addr_add= (addr[0], addr[1])
@@ -175,7 +181,8 @@ def tcp_listener():
                             Shared.unicast_TCP_sender(server_state, SERVER_LIST[i])
                         print(f'The current Clientlist is: {CLIENT_LIST}')
 
-
+                #Creating the serverstate that is sent to all other servers. Its needed if the leader crashes
+                #and an other server needs to take its place. In order to do that, every server needs the current server state
                 case {'Status': 'Status', 'Server_List': server_list, 'Client_List': client_list, 'Message_List': message_list,'Leader_Address': leader_address, 'Sender': address, 'Voting': voting, 'Message_Clock': clock}:
                         SERVER_LIST=msg['Server_List']
                         LEADER_ADDRESS=msg['Leader_Address']
@@ -190,6 +197,7 @@ def tcp_listener():
                         print(f'Received current Server state')
                         get_neighbor()
 
+                #Handling messages received, for e.g. the victory message of a new leader
                 case{'Message_Type': server_message, 'Message': message, 'Address': addr}:
                     if server_message=='Server_Message':
                         serv_msg= msg['Message']
@@ -198,9 +206,10 @@ def tcp_listener():
                         serv_msg = msg['Message']
                         print(serv_msg)
 
+                #Ping received - Hearbeat
                 case{'Request_Type': 'Ping', 'requester_type': 'Server', 'Address': addr}:
                     print(f'ping from {msg["Address"]}')
-                    test=0
+
 
 
                 #As soon as a server is removed, the leader checks with the other servers if everybody else is still
@@ -224,7 +233,7 @@ def tcp_listener():
                     elect_leader()
 
 
-
+#Creating the current server state
 def create_server_state():
     SERVER_LIST.sort()
     server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Message_List': MESSAGE_LIST,'Leader_Address': LEADER_ADDRESS, 'Sender': SERVER_ADDRESS, "Voting": VOTING, 'Message_Clock': CLOCK}
@@ -390,6 +399,7 @@ def elect_leader():
         print('[SERVER] There is no Server with a higher ID, therefore I am declaring myself Leader')
         victory()
 
+#When a server wins the leader election, it declares victory
 def victory():
     global ISLEADER, LEADER_ADDRESS, VOTING
     LEADER_ADDRESS=SERVER_ADDRESS
@@ -421,6 +431,7 @@ def victory():
         except TimeoutError as t:
             print(t)
 
+#Multicast with the chat message to all clients of the chat room
 def send_client_msg(msg):
     MULTICAST_TTL = 2
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
@@ -431,19 +442,6 @@ def send_client_msg(msg):
         print(f'Failed to send Message to the other Clients: {e}')
     finally:
         sock.close()
-
-
-
-
-
-
-    #msg= Shared.create_node('Voting', 'Server', SERVER_ADDRESS )
-    #Shared.unicast_TCP_sender(repr(msg).encode(), )
-
-
-    print()
-
-
 
 
 

@@ -3,6 +3,8 @@ import threading
 import time
 import Shared
 import ast
+from time import sleep
+
 
 BROADCASTCODE_SERVER='820734130907390'
 BROADCASTCODE_SERVER_REPLY='482168278318180'
@@ -64,21 +66,29 @@ def connect_with_server(): # connecto to server giving username, start chatting 
     while LEADER_REACHABLE is True and active:
         msg=input()
 
+        count=0
         if len(msg)>0:
             if len(msg)>4096/10:
                 print('Your message is too long')
             else:
                 client_msg= Shared.create_chat_msg_node('Chat', msg , USERNAME, CLIENT_ADDRESS, clock)
+
                 try:
                     Shared.unicast_TCP_sender(repr(client_msg).encode(), SERVER_ADDRESS)
                 except (ConnectionRefusedError, TimeoutError):
-                    print("Server is not reachable at the moment")
-                    LEADER_REACHABLE = False
-    else:
-        print('Leader not reachable')
-        stop_client()
+                    print("\nServer is not reachable at the moment, pls wait for 5 seconds till a new leader is elected")
+                    print('sleep')
+                    sleep(5)
+                    try:
+                        Shared.unicast_TCP_sender(repr(client_msg).encode(), SERVER_ADDRESS)
+                    except (ConnectionRefusedError, TimeoutError):
+                        pass
+                        LEADER_REACHABLE = False
+                        print('Leader not reachable; starting broadcast again - looking for a new server')
+                        client_broadcast()
+                        #stop_client()
 
-    print('Client is shutting down')
+    #print('Client is shutting down')
 
 
 
