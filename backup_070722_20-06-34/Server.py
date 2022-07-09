@@ -5,7 +5,8 @@ import ast
 from time import sleep
 
 
-
+MCAST_SERVER_GRP = '224.1.1.1'
+MCAST_SERVER_PORT = 5007
 
 
 BROADCASTCODE_SERVER='820734130907390'
@@ -18,6 +19,8 @@ SERVER_ADDRESS=SERVER.getsockname()
 SERVER_LIST=[SERVER_ADDRESS]
 CLIENT_LIST=[]
 SERVER_LIST_RING=[]
+MESSAGE_LIST=[]
+CLOCK=0
 
 ISLEADER=False
 IS_ACTIVE=True
@@ -100,14 +103,17 @@ def tcp_listener():
     while True:
         try:
             data, addr= SERVER.accept()     #accept the TCP connection
-            recv_data=data.recv(1024)  #receive packages with buffer size of 1024
+            recv_data=data.recv(4096)  #receive packages with buffer size of 1024
             msg=ast.literal_eval(recv_data.decode())
+
         except TimeoutError as e:
             pass
         else:
+            global LEADER_ADDRESS, CLOCK, MESSAGE_LIST, CLIENT_LIST
+
             match msg:
                 case {'Request_Type': 'Join', 'requester_type': requester_type, 'Address': addr}:
-                    if requester_type == 'Server':
+                    if requester_type == 'Server' and SERVER_ADDRESS==LEADER_ADDRESS:
                         global SERVER_LIST
                         addr_add= (addr[0], addr[1])
                         print(f'[SERVER] Added Server: {addr_add} to the server list')
@@ -117,8 +123,7 @@ def tcp_listener():
                         server_state=create_server_state()     #Server state is created = Serverlist, Clientlist, etc to be sent to the joining Server
                         server_state=repr(server_state).encode()    #Message gets encoded for TCP MSG
                         Shared.unicast_TCP_sender(server_state, addr)   #TCP MSG to joining Server
-                        print(f'Die Aktuelle Serverliste ist: {SERVER_LIST}')
-
+                        print(f'The current serverlist is: {SERVER_LIST}')
 
 
                         #The other Servers need the updated Serverlist, therefore it is sent to every Server besides the Leader and the joining Server
@@ -130,20 +135,40 @@ def tcp_listener():
 
                         get_neighbor()
 
+                    if requester_type == 'Client' and SERVER_ADDRESS==LEADER_ADDRESS:
+                        global CLIENT_LIST
+                        addr_add_client= (addr[0], addr[1])
+                        print(f'[SERVER] Added Client: {addr_add_client} to the client list')
+                        if addr_add_client not in CLIENT_LIST:
+                            CLIENT_LIST.append(addr_add_client)
+                        server_state=create_server_state()
+                        server_state = repr(server_state).encode()  # Message gets encoded for TCP MSG
+                        for i in range(len(SERVER_LIST)):
+                            Shared.unicast_TCP_sender(server_state, SERVER_LIST[i])
+                        print(f'The current Clientlist is: {CLIENT_LIST}')
 
-                case {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': leader_address, 'Sender': address, 'Voting': voting}:
-                    global LEADER_ADDRESS
-                    SERVER_LIST=msg['Server_List']
-                    LEADER_ADDRESS=msg['Leader_Address']
-                    VOTING=msg['Voting']
-                    print(f'[SERVER] Received Server List {SERVER_LIST} from {msg["Sender"]}')
-                    print(f'The leader is {LEADER_ADDRESS}')
-                    get_neighbor()
 
-                case{'Message_Type': 'Server_Message', 'Message': message, 'Address': addr}:
-                    serv_msg= msg['Message']
-                    print(serv_msg)
+                case {'Status': 'Status', 'Server_List': server_list, 'Client_List': client_list, 'Message_List': message_list,'Leader_Address': leader_address, 'Sender': address, 'Voting': voting, 'Message_Clock': clock}:
+                        SERVER_LIST=msg['Server_List']
+                        LEADER_ADDRESS=msg['Leader_Address']
+                        CLIENT_LIST=msg['Client_List']
+                        MESSAGE_LIST=msg['Message_List']
+                        VOTING=msg['Voting']
+                        CLOCK=msg['Message_Clock']
 
+                        #print(f'[SERVER] Received Server List {SERVER_LIST} from {msg["Sender"]}')
+                        #print(f'[SERVER] Received Client List {CLIENT_LIST} from {msg["Sender"]}')
+                        #print(f'The leader is {LEADER_ADDRESS}')
+                        print(f'Received current Server state')
+                        get_neighbor()
+
+                case{'Message_Type': server_message, 'Message': message, 'Address': addr}:
+                    if server_message=='Server_Message':
+                        serv_msg= msg['Message']
+                        print(serv_msg)
+                    if server_message == 'Victory':
+                        serv_msg = msg['Message']
+                        print(serv_msg)
                 case{'Request_Type': 'Ping', 'requester_type': 'Server', 'Address': addr}:
                     print(f'ping from {msg["Address"]}')
                     test=0
@@ -152,30 +177,61 @@ def tcp_listener():
                 #As soon as a server is removed, the leader checks with the other servers if everybody else is still
                 #there -> to be implemented with Multicast
                 case {'Request_Type': 'Left', 'requester_type': 'Server', 'Address': address}:
-                    sleep(1)
-                    SERVER_LIST.remove(address)
-                    server_state = create_server_state()
-                    print(f'The current serverlist is: {SERVER_LIST}; The server {address} was removed from the serverlist')
-                    for i in range(len(SERVER_LIST)):
-                        if SERVER_LIST[i] != LEADER_ADDRESS:
-                            try:
-                                Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
-                            except TimeoutError as e:
-                                pass
+                    if SERVER_ADDRESS==LEADER_ADDRESS:
+                        sleep(1)
+                        SERVER_LIST.remove(address)
+                        server_state = create_server_state()
+                        print(f'The current serverlist is: {SERVER_LIST}; The server {address} was removed from the serverlist')
+                        for i in range(len(SERVER_LIST)):
+                            if SERVER_LIST[i] != LEADER_ADDRESS:
+                                try:
+                                    Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+                                except TimeoutError as e:
+                                    pass
 
                 #Another Server with a lower ID startet an election and is sending a Voting msg to this server
                 #This Server - if active - then replies
                 case{'Request_type': 'Voting', 'Address': addr}:
                     elect_leader()
-        used=False
+
+                case {'Message_Type': 'Chat','Username':username,'Message': message, 'Address': addr, 'Clock':clock}:
+                    if SERVER_ADDRESS==LEADER_ADDRESS:
+                        CLOCK+=1
+                        msg['Clock']=CLOCK
+                        name=msg['Username']
+                        msg_enc=msg['Message']
+                        client_msg=f'{name}: {msg_enc}'
+                        MESSAGE_LIST.append(msg)
+                        print(MESSAGE_LIST)
+                        send_client_msg(msg)
+
+                        #I need to create a new server state as soon as a message of the clients is received, so that every server keeps track of the new messages.
+                        #Otherwise if the server crashes, the other server maybe dont have all messages in the Message List
+                        server_state = create_server_state()
+                        for i in range(len(SERVER_LIST)):
+                            if SERVER_LIST[i] != LEADER_ADDRESS:
+                                try:
+                                    Shared.unicast_TCP_sender(repr(server_state).encode(), SERVER_LIST[i])
+                                except TimeoutError as e:
+                                    pass
+
+                case{'Message_Type': 'User', 'Username': username, 'Message': message, 'Address': address,
+                         'Clock': clock}:
+                    msg_client = Shared.create_msg_node('Join', f'{[msg["Username"]]} joined the chat room', SERVER_ADDRESS)
+                    for i in range(len(CLIENT_LIST)):
+                        if CLIENT_LIST[i] != msg['Address']:
+                            try:
+                                Shared.unicast_TCP_sender(repr(msg_client).encode(), CLIENT_LIST[i])
+                            except TimeoutError:
+                                pass
+
+
 
 def create_server_state():
     SERVER_LIST.sort()
-    server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Leader_Address': LEADER_ADDRESS, 'Sender': SERVER_ADDRESS, "Voting": VOTING}
+    server_status = {'Status': 'Status', 'Server_List': SERVER_LIST, 'Client_List': CLIENT_LIST, 'Message_List': MESSAGE_LIST,'Leader_Address': LEADER_ADDRESS, 'Sender': SERVER_ADDRESS, "Voting": VOTING, 'Message_Clock': CLOCK}
     return server_status
 
-
-    print()
 
 #With this function each server can identify its neigbor based on the Serverlist that it received from the leader
 #The Serverlist is maintained by the leader
@@ -235,6 +291,11 @@ def heartbeat():
                                 print(f'Count: {count}')
                             if count==2:
                                 print('Cant reach leader - Starting new leader election')
+                                for i in range(len(CLIENT_LIST)):
+                                    client_msg = Shared.create_msg_node('Leader_Crash',
+                                                                        'The Leader crashed, a new leader is elected, you can soon start chatting again',
+                                                                        SERVER_ADDRESS)
+                                    Shared.unicast_TCP_sender(repr(client_msg).encode(), CLIENT_LIST[i])
                                 SERVER_LIST.remove(LEADER_ADDRESS)
                                 SERVER_LIST.remove(NEIGHBOR)
                                 LEADER_ADDRESS = ''
@@ -281,6 +342,10 @@ def heartbeat():
                     #If a server discovers that the not responding server is the leader, a new leader election is startet
                     #to deal with the problem
                     if NEIGHBOR==LEADER_ADDRESS:
+
+                        for i in range(len(CLIENT_LIST)):
+                            client_msg=Shared.create_msg_node('Leader_Crash', 'The Leader crashed, a new leader is elected, you can soon start chatting again',SERVER_ADDRESS)
+                            Shared.unicast_TCP_sender(repr(client_msg).encode(), CLIENT_LIST[i])
                         SERVER_LIST.remove(NEIGHBOR)
                         LEADER_ADDRESS=''
                         VOTING=True
@@ -336,6 +401,8 @@ def victory():
 
     print('[LEADER] Sending the latest server state to each of my members and starting heartbeat')
     print(f'The current serverlist is: {SERVER_LIST}')
+    print(f'The current clientlist is: {CLIENT_LIST}')
+
     for i in range(len(SERVER_LIST)):
         if SERVER_LIST[i] != SERVER_ADDRESS:
             try:
@@ -344,8 +411,25 @@ def victory():
             except TimeoutError as t:
                 print(t)
 
+    for i in range(len(CLIENT_LIST)):
+        client_msg = Shared.create_msg_node('Victory',
+                                            f'[{SERVER_ADDRESS}] I am the new leader, you can start chatting again',
+                                            SERVER_ADDRESS)
+        try:
+            Shared.unicast_TCP_sender(repr(client_msg).encode(), CLIENT_LIST[i])
+        except TimeoutError as t:
+            print(t)
 
-
+def send_client_msg(msg):
+    MULTICAST_TTL = 2
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, MULTICAST_TTL)
+    try:
+        sock.sendto(f'{msg}'.encode(), (MCAST_SERVER_GRP, MCAST_SERVER_PORT))
+    except Exception as e:
+        print(f'Failed to send Message to the other Clients: {e}')
+    finally:
+        sock.close()
 
 
 

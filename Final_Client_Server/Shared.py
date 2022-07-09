@@ -1,11 +1,12 @@
 import socket
 import struct
-
+import sys
 
 BROADCAST_PORT=10001
 
 MCAST_SERVER_GRP = '224.1.1.1'
 MCAST_SERVER_PORT = 5007
+GROUP=(MCAST_SERVER_GRP, MCAST_SERVER_PORT)
 
 
 
@@ -46,13 +47,12 @@ def broadcast_UDP_sender(timeout=None):
     return s
 
 def multicast_UDP_listener():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    addr=(get_ip(), 0)
-    sock.bind(MCAST_SERVER_GRP,MCAST_SERVER_PORT)
-    mreq = struct.pack("4sl", socket.inet_aton(MCAST_SERVER_GRP), socket.INADDR_ANY)
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-    return sock
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)
+    s.bind(('', MCAST_SERVER_PORT))
+    mreq = struct.pack('4sL', socket.inet_aton(MCAST_SERVER_GRP), socket.INADDR_ANY)
+    s.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    return s
 
 def multicast_UDP_sender():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -68,3 +68,6 @@ def create_msg_node (msg_type, msg, addr):
 
 def create_vote_msg(type, addr):
     return{'Request_type': type, 'Address': addr}
+
+def create_chat_msg_node (msg_type, msg, username, addr, clock):
+    return {'Message_Type': msg_type,'Username':username,'Message': msg, 'Address': addr, 'Clock': clock}
