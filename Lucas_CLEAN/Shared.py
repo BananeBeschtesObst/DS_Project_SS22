@@ -22,7 +22,7 @@ def broadcast_socket (timeout=None):
         broadcast_socket.settimeout(timeout)
     return broadcast_socket
 
-def setup_tcp_listener_socket():
+def setup_tcp_listener_socket(): # unicast TCP listener
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind(("127.0.0.1", 0))
     server_socket.listen()
@@ -33,7 +33,7 @@ def setup_client_socket():
     client_socket.bind(("127.0.0.1",0))
     return client_socket
 
-def tcp_message(message, address):
+def tcp_message(message, address): # unicast TCP sender
     transmit_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     transmit_socket.settimeout(1)
     transmit_socket.connect(address)
